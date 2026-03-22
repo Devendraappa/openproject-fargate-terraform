@@ -9,26 +9,54 @@ jobs:
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
-      id-token: write
+      id-token: write   # required for OIDC
+
+    env:
+      AWS_REGION: ap-south-1
 
     steps:
-      - uses: actions/checkout@v4
+      # 1. Checkout repo
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
+      # 2. Setup Terraform (MATCH LOCAL VERSION)
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.x
+          terraform_version: 1.14.5
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      # 3. Verify version (debug safety)
+      - name: Terraform Version
+        run: terraform version
+
+      # 4. Configure AWS (OIDC)
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::478389845602:role/OIDC-Servicecatalog-role
-          aws-region: ap-south-1
+          aws-region: ${{ env.AWS_REGION }}
 
-      - run: terraform init
-      - run: terraform validate
-      - run: terraform plan
+      # 5. Terraform Init
+      - name: Terraform Init
+        run: terraform init
+
+      # 6. Terraform Validate
+      - name: Terraform Validate
+        run: terraform validate
+
+      # 7. Terraform Format Check (optional but good)
+      - name: Terraform Format
+        run: terraform fmt -check
+
+      # 8. Terraform Plan (only on PR)
+      - name: Terraform Plan
         if: github.event_name == 'pull_request'
+        run: terraform plan -no-color
 
-      - run: terraform apply -auto-approve
+      # 9. Terraform Apply (only on main push)
+      - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve
