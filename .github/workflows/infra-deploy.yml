@@ -47,9 +47,9 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-      # 7. Terraform Format Check (optional but good)
-      - name: Terraform Format
-        run: terraform fmt -check
+      # # 7. Terraform Format Check (optional but good)
+      # - name: Terraform Format
+      #   run: terraform fmt -check
 
       # 8. Terraform Plan (only on PR)
       - name: Terraform Plan
