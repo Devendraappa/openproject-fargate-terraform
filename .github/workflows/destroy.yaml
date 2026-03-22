@@ -1,0 +1,59 @@
+name: Terraform Destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type 'destroy' to confirm"
+        required: true
+
+jobs:
+  destroy:
+    name: Terraform Destroy
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      AWS_REGION: ap-south-1
+
+    steps:
+      # 1. Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Safety check (prevents accidental destroy)
+      - name: Validate Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "destroy" ]; then
+            echo "You must type 'destroy' to proceed"
+            exit 1
+          fi
+
+      # 3. Setup Terraform (match your local)
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.5
+
+      # 4. Verify version
+      - name: Terraform Version
+        run: terraform version
+
+      # 5. Configure AWS (OIDC)
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::478389845602:role/OIDC-Servicecatalog-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 6. Init
+      - name: Terraform Init
+        run: terraform init -input=false
+     
+
+      # 7. Destroy apply
+      - name: Terraform Destroy Apply
+        run: terraform destroy -auto-approve -input=false
