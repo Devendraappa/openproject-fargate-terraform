@@ -1,0 +1,34 @@
+name: Terraform OpenProject Fargate
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.x
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::478389845602:role/OIDC-Servicecatalog-role
+          aws-region: ap-south-1
+
+      - run: terraform init
+      - run: terraform validate
+      - run: terraform plan
+        if: github.event_name == 'pull_request'
+
+      - run: terraform apply -auto-approve
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
