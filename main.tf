@@ -2,8 +2,8 @@
 resource "aws_servicecatalog_provisioned_product" "vpc" {
   name                       = "openproject-vpc-${var.environment}"
   product_id                 = "prod-wpdpc4t3kfp5o"
-  provisioning_artifact_id   = "pa-wydhtz4vrujz4"   # from your product details
-  launch_role_arn            = "arn:aws:iam::478389845602:role/ServiceCatalog-VPC-Launch-Role" # optional but recommended if constraint exists
+  provisioning_artifact_id   = "pa-i6mxsxsy4wlzy"   # from your product details
+  #launch_role_arn            = "arn:aws:iam::478389845602:role/ServiceCatalog-VPC-Launch-Role" # optional but recommended if constraint exists
 
   dynamic "provisioning_parameters" {
     for_each = var.vpc_provisioning_parameters
@@ -28,12 +28,32 @@ resource "aws_servicecatalog_provisioned_product" "vpc" {
 
 # Extract outputs from the provisioned product (adjust keys to match your CFN template Outputs)
 locals {
-  vpc_outputs = { for o in aws_servicecatalog_provisioned_product.vpc.outputs : o.output_key => o.output_value }
+  # Normalize Service Catalog outputs which may be a list of {key,value} objects
+  # or already a map. Try both shapes and produce a map `outputs_map`.
+  raw_vpc_outputs = try(aws_servicecatalog_provisioned_product.vpc.outputs, [])
 
-  vpc_id             = local.vpc_outputs["VPCID"]                # common key name
-  public_subnet_ids  = split(",", local.vpc_outputs["PublicSubnets"]  != null ? local.vpc_outputs["PublicSubnets"]  : "")
-  private_subnet_ids = split(",", local.vpc_outputs["PrivateSubnets"] != null ? local.vpc_outputs["PrivateSubnets"] : "")
+  outputs_map = try(
+    { for o in local.raw_vpc_outputs : o.output_key => o.output_value },
+    try(
+      { for o in local.raw_vpc_outputs : o.key => o.value },
+      {}
+    )
+  )
+
+  vpc_id = length(var.vpc_id) > 0 ? var.vpc_id : lookup(local.outputs_map, "VpcId", lookup(local.outputs_map, "VPCID", null))
+ 
+   public_subnet_ids  = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : compact(split(",", lookup(local.outputs_map, "PublicSubnets", "")))
+   private_subnet_ids = length(var.private_subnet_ids) > 0 ? var.private_subnet_ids : compact(split(",", lookup(local.outputs_map, "PrivateSubnets", "")))
 }
+#Updated locals – now perfectly matches the new template
+# locals {
+#   vpc_outputs        = { for o in aws_servicecatalog_provisioned_product.vpc.outputs : o.output_key => o.output_value }
+#   vpc_id             = local.vpc_outputs["VpcId"]
+#   public_subnet_ids  = split(",", local.vpc_outputs["PublicSubnets"])
+#   private_subnet_ids = split(",", local.vpc_outputs["PrivateSubnets"])
+# }
+
+
 
 # 2. Security Groups
 resource "aws_security_group" "alb" {
@@ -208,7 +228,7 @@ resource "aws_ecs_task_definition" "openproject" {
       { name = "OPENPROJECT_DATABASE__USER",     value = aws_db_instance.openproject.username },
       { name = "OPENPROJECT_DATABASE__NAME",     value = aws_db_instance.openproject.db_name },
       { name = "OPENPROJECT_DATABASE__ENCODING", value = "utf8" },
-      { name = "SECRET_KEY_BASE",                value = "PLACEHOLDER" }   # will be overridden by secret
+      #{ name = "SECRET_KEY_BASE",                value = "PLACEHOLDER" }   # will be overridden by secret
     ]
 
     secrets = [
